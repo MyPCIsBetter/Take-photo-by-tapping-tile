@@ -7,3 +7,5 @@ How to use:
 4. Click on tile
 
 It should use one of available cameras (in this example Front) to take photo and save it to your device. It works correctly on PC, but phones saves blank photos.
+
+MainPage.xaml is where I placed the button to pin tile. PhotoThanApp.xaml - takes actual photo.
