@@ -5,10 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
+using Windows.ApplicationModel;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Sensors;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.Graphics.Display;
 using Windows.Graphics.Imaging;
 using Windows.Media.Capture;
 using Windows.Media.MediaProperties;
@@ -30,15 +32,14 @@ namespace TapTileToTakePhoto
 {
     /// <summary>
     /// Page that will take photo
+    /// Code based on this tutorial: https://msdn.microsoft.com/en-us/windows/uwp/audio-video-camera/capture-photos-and-video-with-mediacapture
     /// </summary>
     public sealed partial class PhotoThanApp : Page
     {
         private MediaCapture _mediaCapture;
         private bool _isInitialized;
-
         private bool _externalCamera;
         private bool _mirroringPreview;
-        private bool _isPreviewing;
         private static readonly Guid RotationKey = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
 
         private SimpleOrientation _deviceOrientation = SimpleOrientation.NotRotated;
@@ -48,19 +49,26 @@ namespace TapTileToTakePhoto
             this.InitializeComponent();
 
             Application.Current.Resuming += Application_Resuming;
+            Application.Current.Suspending += Application_Suspending;
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
+
+            if (_mediaCapture != null)
+            {
+                CleanupCamera();
+            }
+
             await InitializeCameraAsync();
 
             try
             {
                 //e.Parameter - name of tile
-                //if (true || (e.Parameter != null && !String.IsNullOrEmpty(e.Parameter.ToString())))
-                //{
+                if (true || (e.Parameter != null && !String.IsNullOrEmpty(e.Parameter.ToString())))
+                {
                     await TakePhotoAsync();
-                //}
+                }
             }
             catch (Exception ex)
             {
@@ -75,6 +83,19 @@ namespace TapTileToTakePhoto
             if (Frame.CurrentSourcePageType == typeof(PhotoThanApp))
             {
                 await InitializeCameraAsync();
+            }
+        }
+
+        private void Application_Suspending(object sender, SuspendingEventArgs e)
+        {
+            // Handle global application events only if this page is active
+            if (Frame.CurrentSourcePageType == typeof(PhotoThanApp))
+            {
+                var deferral = e.SuspendingOperation.GetDeferral();
+
+                CleanupCamera();
+
+                deferral.Complete();
             }
         }
 
@@ -141,10 +162,15 @@ namespace TapTileToTakePhoto
                         _externalCamera = false;
 
                         // Only mirror the preview if the camera is on the front panel
-                        //_mirroringPreview = (cameraDevice.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Front);
+                        _mirroringPreview = (cameraDevice.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Front);
                     }
+                    
+                    //Why CaptureElement is here: http://stackoverflow.com/a/34190537/1804027
+                    var captureElement = new CaptureElement();
+                    captureElement.Source = _mediaCapture;
 
-                    //await StartPreviewAsync();
+                    //Why StartPreviewAsync is here: http://stackoverflow.com/q/15390861/1804027 (dark photos)
+                    await _mediaCapture.StartPreviewAsync();
 
                     //UpdateCaptureControls();
                 }
@@ -228,6 +254,26 @@ namespace TapTileToTakePhoto
                     await encoder.BitmapProperties.SetPropertiesAsync(properties);
                     await encoder.FlushAsync();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Cleans up the camera resources (after stopping any video recording and/or preview if necessary) and unregisters from MediaCapture events
+        /// </summary>
+        /// <returns></returns>
+        private void CleanupCamera()
+        {
+            Debug.WriteLine("CleanupCameraAsync");
+
+            if (_isInitialized)
+            {
+                _isInitialized = false;
+            }
+
+            if (_mediaCapture != null)
+            {
+                _mediaCapture.Dispose();
+                _mediaCapture = null;
             }
         }
     }
